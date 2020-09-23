@@ -19,18 +19,19 @@ class SerialHandler():
 
     def update(self):
         self.ser.flushInput()
+        self.ser.write(str.encode('s'))
         raw = self.ser.readline()
+        # print(raw)
         list_str = raw.strip().decode('utf-8').split(',')
         # print(list_str)
         try:
             self.list_float = [float(s) for s in list_str]
         except ValueError as e:
             print("Cought ValueError:", e)
-        # return self.list_float
 
 
 if __name__ == "__main__":
-    s = SerialHandler()
+    s = SerialHandler(rate = 115200)
     while True:
         s.update()
         print(s.list_float)
