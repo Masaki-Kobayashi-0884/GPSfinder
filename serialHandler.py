@@ -1,38 +1,60 @@
+import re
 import time
 
 import serial
 
 
 class SerialHandler():
-    DEFAULT_COM_PORT = 'COM3'
-    DEFAULT_BAUD_RATE = 19200
+    """シリアル通信ハンドラ
 
-    def __init__(self, port=DEFAULT_COM_PORT, rate=DEFAULT_BAUD_RATE):
-        self.ser = serial.Serial(port, rate, timeout=1)
-        print('initialize start')
+    シリアル通信から数値のリストへ変換するまでを行う
+
+    Args:
+        port(str, optional): ポートを選択 初期値COM3
+        baudrate(int, optional): ボーレートを設定 初期値115200
+        timeout(int, optional): タイムアウトを設定 初期値1
+
+    Attitudes:
+        data(list[float]): 整形されたデータが収納される。更新は update() で
+        re_pattern(str): データ抽出用の正規表現パターン /nと/rに挟まれた部分を抽出している
+        ser(serial.Serial): pyserial
+    """
+
+    def __init__(self, port="COM3", baudrate=115200, timeout=1):
+        self.data = []
+        self.re_pattern = r'\n.+\r'
+        self.ser = serial.Serial(port, baudrate, timeout=timeout)
         time.sleep(3)
-        print('initialize end')
-        self.list_float = []
-    
+        self.ser.flushInput()
+        print("init end")
+
     def __del__(self):
         self.ser.close()
 
     def update(self):
-        self.ser.flushInput()
-        self.ser.write(str.encode('s'))
-        raw = self.ser.readline()
-        # print(raw)
-        list_str = raw.strip().decode('utf-8').split(',')
-        # print(list_str)
-        try:
-            self.list_float = [float(s) for s in list_str]
-        except ValueError as e:
-            print("Cought ValueError:", e)
+        """インスタンス変数 data を更新
+        
+        returns:
+            bool: True なら成功 False なら失敗 data の変化なし
+        """
+        # 元データ -> デコード -> /nと/rに囲まれている部分を検索 -> 最新のものを数値のリストに
+        data_raw = self.ser.read_all().decode()
+        data_list = re.findall(self.re_pattern, data_raw)
+        
+        if data_list == []:
+            return False
+        else:
+            pass
+        
+        data_str = data_list[-1].strip().split(',')
+        self.data = [float(s) for s in data_str]
+        
+        return True
 
 
 if __name__ == "__main__":
-    s = SerialHandler(rate = 115200)
+    ser = SerialHandler()
     while True:
-        s.update()
-        print(s.list_float)
+        ser.update()
+        print(ser.data)
         time.sleep(1)

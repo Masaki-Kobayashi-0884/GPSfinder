@@ -73,14 +73,14 @@ class Application(tk.Frame):
         self.heading_azimuth_dummy += 1
         self.heading_azimuth = self.heading_azimuth_dummy
         self.heading_latitude = 38.260295
-        self.heading_longitude = 140.882385
+        self.heading_longitude = 140.882385 # 仙台駅
         self.target_latitude = 38.255435
-        self.target_longitude = 140.840823
+        self.target_longitude = 140.840823 # 創造工学センター
         ###################
 
         # ### TRUE INPUT ###
         # self.serial.update()
-        # self.unpack_data(self.serial.list_float)
+        # self.unpack_data(self.serial.data)
         # ##################
 
         # 目標方位・距離計算
