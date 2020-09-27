@@ -1,116 +1,109 @@
-"""参照
-https://qiita.com/r-fuji/items/99ca549b963cedc106ab
-"""
-
 import math
 
-# 楕円体
-ELLIPSOID_GRS80 = 1 # GRS80
-ELLIPSOID_WGS84 = 2 # WGS84
+ELLIPSOID = {'GRS80': [6378137.0, 1 / 298.257222101],
+             'WGS84': [6378137.0, 1 / 298.257223563]}  # [長軸半径, 扁平率]
 
-# 楕円体ごとの長軸半径と扁平率
-GEODETIC_DATUM = {
-    ELLIPSOID_GRS80: [
-        6378137.0,         # [GRS80]長軸半径
-        1 / 298.257222101, # [GRS80]扁平率
-    ],
-    ELLIPSOID_WGS84: [
-        6378137.0,         # [WGS84]長軸半径
-        1 / 298.257223563, # [WGS84]扁平率
-    ],
-}
+REPEAT_RIMIT = 1000
 
-# 反復計算の上限回数
-ITERATION_LIMIT = 1000
 
-"""
-Vincenty法(逆解法)
-2地点の座標(緯度経度)から、距離と方位角を計算する
-:param lat1: 始点の緯度
-:param lon1: 始点の経度
-:param lat2: 終点の緯度
-:param lon2: 終点の経度
-:param ellipsoid: 楕円体
-:return: 距離と方位角
-"""
-def vincenty_inverse(lat1, lon1, lat2, lon2, ellipsoid=None):
+def vincenty_inverse(latitude1, longitude1, latitude2, longitude2, ellipsoid='WGS84'):
+    """vincenty 逆解法
+    2地点の緯度経度から距離・方位角を求める
 
-    # 差異が無ければ0.0を返す
-    if math.isclose(lat1, lat2) and math.isclose(lon1, lon2):
-        return {
-            'distance': 0.0,
-            'azimuth1': 0.0,
-            'azimuth2': 0.0,
-        }
+    Args:
+        latitude1(float): 始点の緯度
+        longitude1(float): 始点の経度
+        latitude2(float): 終点の緯度
+        longitude2(float): 終点の経度
 
-    # 計算時に必要な長軸半径(a)と扁平率(ƒ)を定数から取得し、短軸半径(b)を算出する
-    # 楕円体が未指定の場合はGRS80の値を用いる
-    a, ƒ = GEODETIC_DATUM.get(ellipsoid, GEODETIC_DATUM.get(ELLIPSOID_GRS80))
-    b = (1 - ƒ) * a
+    returns:
+        dict:
+            'distance': 距離
+            'azimuth12': 始点から終点の方位
+            'azimuth21': 終点から始点の方位
 
-    φ1 = math.radians(lat1)
-    φ2 = math.radians(lat2)
-    λ1 = math.radians(lon1)
-    λ2 = math.radians(lon2)
+    """
 
-    # 更成緯度(補助球上の緯度)
-    U1 = math.atan((1 - ƒ) * math.tan(φ1))
-    U2 = math.atan((1 - ƒ) * math.tan(φ2))
+    if math.isclose(latitude1, latitude2) and math.isclose(longitude1, longitude2):
+        return {'distance': 0.0,
+                'azimuth12': 0.0,
+                'azimuth21': 0.0}
 
-    sinU1 = math.sin(U1)
-    sinU2 = math.sin(U2)
-    cosU1 = math.cos(U1)
-    cosU2 = math.cos(U2)
-
-    # 2点間の経度差
-    L = λ2 - λ1
-
-    # λをLで初期化
-    λ = L
-
-    # 以下の計算をλが収束するまで反復する
-    # 地点によっては収束しないことがあり得るため、反復回数に上限を設ける
-    for i in range(ITERATION_LIMIT):
-        sinλ = math.sin(λ)
-        cosλ = math.cos(λ)
-        sinσ = math.sqrt((cosU2 * sinλ) ** 2 + (cosU1 * sinU2 - sinU1 * cosU2 * cosλ) ** 2)
-        cosσ = sinU1 * sinU2 + cosU1 * cosU2 * cosλ
-        σ = math.atan2(sinσ, cosσ)
-        sinα = cosU1 * cosU2 * sinλ / sinσ
-        cos2α = 1 - sinα ** 2
-        cos2σm = cosσ - 2 * sinU1 * sinU2 / cos2α
-        C = ƒ / 16 * cos2α * (4 + ƒ * (4 - 3 * cos2α))
-        λʹ = λ
-        λ = L + (1 - C) * ƒ * sinα * (σ + C * sinσ * (cos2σm + C * cosσ * (-1 + 2 * cos2σm ** 2)))
-
-        # 偏差が.000000000001以下ならbreak
-        if abs(λ - λʹ) <= 1e-12:
-            break
+    # 楕円体選択
+    if type(ellipsoid) == list:
+        a, f = ellipsoid
     else:
-        # 計算が収束しなかった場合はNoneを返す
-        print("WARNING: Iterarion exceeded {} times.".format(i))
+        a, f = ELLIPSOID[ellipsoid]
+
+    # 短軸半径
+    b = (1 - f) * a
+    # 緯度ラジアン
+    φ1 = math.radians(latitude1)
+    φ2 = math.radians(latitude2)
+    # 経度ラジアン
+    L1 = math.radians(longitude1)
+    L2 = math.radians(longitude2)
+    L = L2 - L1  # 多分日本語Wiki間違えてる
+    # 更成緯度
+    U1 = math.atan((1 - f) * math.tan(φ1))
+    sin_U1 = math.sin(U1)
+    cos_U1 = math.cos(U1)
+    U2 = math.atan((1 - f) * math.tan(φ2))
+    sin_U2 = math.sin(U2)
+    cos_U2 = math.cos(U2)
+
+    # λ初期化
+    λ = L
+    # 収束させる
+    for i in range(REPEAT_RIMIT):
+        sin_λ = math.sin(λ)
+        cos_λ = math.cos(λ)
+        sin_σ = math.sqrt((cos_U2 * sin_λ) ** 2 + (cos_U1 *
+                                                   sin_U2 - sin_U1 * cos_U2 * cos_λ) ** 2)
+        cos_σ = sin_U1 * sin_U2 + cos_U1 * cos_U2 * cos_λ
+        σ = math.atan2(sin_σ, cos_σ)
+        sin_α = cos_U1 * cos_U2 * sin_λ / sin_σ
+        cos2_α = 1 - sin_α ** 2
+        cos_2σm = cos_σ - 2 * sin_U1 * sin_U2 / cos2_α
+        C = f / 16 * cos2_α * (4 + f * (4 - 3 * cos2_α))
+        λ_ = λ
+        λ = L + (1 - C) * f * sin_α * (σ + C * sin_σ *
+                                       (cos_2σm + C * cos_σ * (-1 + 2 * cos_2σm ** 2)))
+        if abs(λ_ - λ) <= 1e-12:
+            break
+    else:  # 収束失敗
+        print("WARNING: Repeat exceeded {} times.".format(i))
         return None
 
-    # λが所望の精度まで収束したら以下の計算を行う
-    u2 = cos2α * (a ** 2 - b ** 2) / (b ** 2)
+    # 収束後
+    u2 = cos2_α * (a ** 2 - b ** 2) / (b ** 2)
     A = 1 + u2 / 16384 * (4096 + u2 * (-768 + u2 * (320 - 175 * u2)))
     B = u2 / 1024 * (256 + u2 * (-128 + u2 * (74 - 47 * u2)))
-    Δσ = B * sinσ * (cos2σm + B / 4 * (cosσ * (-1 + 2 * cos2σm ** 2) - B / 6 * cos2σm * (-3 + 4 * sinσ ** 2) * (-3 + 4 * cos2σm ** 2)))
+    Δσ = B * sin_σ * (cos_2σm + B / 4 * (cos_σ * (-1 + 2 * cos_2σm ** 2) -
+                                         B / 6 * cos_2σm * (-3 + 4 * sin_σ ** 2) * (-3 + 4 * cos_2σm ** 2)))
 
-    # 2点間の楕円体上の距離
+    # 距離
     s = b * A * (σ - Δσ)
 
-    # 各点における方位角
-    α1 = math.atan2(cosU2 * sinλ, cosU1 * sinU2 - sinU1 * cosU2 * cosλ)
-    # α2 = math.atan2(cosU1 * sinλ, -sinU1 * cosU2 + cosU1 * sinU2 * cosλ) + math.pi
-
+    # 方位
+    α1 = math.atan2(cos_U2 * sin_λ, cos_U1 * sin_U2 - sin_U1 * cos_U2 * cos_λ)
+    α2 = math.atan2(cos_U1 * sin_λ, (-sin_U1) * cos_U2 +
+                    cos_U1 * sin_U2 * cos_λ) + math.pi
     if α1 < 0:
         α1 = α1 + math.pi * 2
 
-    return s, math.degrees(α1)
+    return {'distance': s,
+            'azimuth12': math.degrees(α1),
+            'azimuth21': math.degrees(α2)}
 
-    # return {
-    #     'distance': s,           # 距離
-    #     'azimuth1': math.degrees(α1), # 方位角(始点→終点)
-    #     'azimuth2': math.degrees(α2), # 方位角(終点→始点)
-    # }
+
+# def vincenty_direct():
+#     pass
+
+
+if __name__ == "__main__":
+    lat1 = 38.260295
+    lon1 = 140.882385  # 仙台駅
+    lat2 = 38.255435
+    lon2 = 140.840823  # 創造工学センター
+    print(vincenty_inverse(lat1, lon1, lat2, lon2))
